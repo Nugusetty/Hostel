@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppData, Floor, Room, Tenant } from '../types';
-import { Plus, User, Trash2, Pencil, MoreVertical } from 'lucide-react';
+import { Plus, User, Trash2, Pencil, X, Save } from 'lucide-react';
 
 interface RoomGridProps {
   data: AppData;
@@ -23,11 +23,21 @@ export const RoomGrid: React.FC<RoomGridProps> = ({
   onEditFloor,
   onSelectRoom 
 }) => {
+  // Add State
   const [newFloorName, setNewFloorName] = useState('');
   const [addingRoomToFloor, setAddingRoomToFloor] = useState<string | null>(null);
   const [newRoomNumber, setNewRoomNumber] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState(2);
 
+  // Edit State
+  const [editingFloor, setEditingFloor] = useState<Floor | null>(null);
+  const [editFloorName, setEditFloorName] = useState('');
+
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [editRoomNumber, setEditRoomNumber] = useState('');
+  const [editRoomCapacity, setEditRoomCapacity] = useState(0);
+
+  // Handlers - Add
   const handleAddFloor = (e: React.FormEvent) => {
     e.preventDefault();
     if (newFloorName.trim()) {
@@ -46,24 +56,31 @@ export const RoomGrid: React.FC<RoomGridProps> = ({
     }
   };
 
-  const handleEditFloorClick = (floor: Floor) => {
-    const newName = window.prompt("Enter new floor name:", floor.name);
-    if (newName && newName.trim() !== "") {
-      onEditFloor(floor.id, newName);
+  // Handlers - Edit Floor
+  const startEditFloor = (floor: Floor) => {
+    setEditingFloor(floor);
+    setEditFloorName(floor.name);
+  };
+
+  const saveFloor = () => {
+    if (editingFloor && editFloorName.trim()) {
+      onEditFloor(editingFloor.id, editFloorName);
+      setEditingFloor(null);
     }
   };
 
-  const handleEditRoomClick = (e: React.MouseEvent, room: Room) => {
+  // Handlers - Edit Room
+  const startEditRoom = (e: React.MouseEvent, room: Room) => {
     e.stopPropagation();
-    const newNum = window.prompt("Enter new room number:", room.number);
-    if (newNum === null) return;
-    
-    const newCapStr = window.prompt("Enter new capacity:", room.capacity.toString());
-    if (newCapStr === null) return;
-    
-    const newCap = parseInt(newCapStr);
-    if (!isNaN(newCap) && newCap > 0) {
-      onEditRoom(room.id, newNum, newCap);
+    setEditingRoom(room);
+    setEditRoomNumber(room.number);
+    setEditRoomCapacity(room.capacity);
+  };
+
+  const saveRoom = () => {
+    if (editingRoom && editRoomNumber.trim() && editRoomCapacity > 0) {
+      onEditRoom(editingRoom.id, editRoomNumber, editRoomCapacity);
+      setEditingRoom(null);
     }
   };
 
@@ -73,6 +90,7 @@ export const RoomGrid: React.FC<RoomGridProps> = ({
 
   return (
     <div className="space-y-8 pb-20">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800">Rooms & Floors</h2>
         <form onSubmit={handleAddFloor} className="flex gap-2">
@@ -95,13 +113,14 @@ export const RoomGrid: React.FC<RoomGridProps> = ({
         </div>
       )}
 
+      {/* Floors List */}
       {data.floors.map(floor => (
         <div key={floor.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <h3 className="font-semibold text-lg text-gray-700">{floor.name}</h3>
               <div className="flex space-x-1">
-                <button onClick={() => handleEditFloorClick(floor)} className="p-1 text-gray-400 hover:text-indigo-600 rounded">
+                <button onClick={() => startEditFloor(floor)} className="p-1 text-gray-400 hover:text-indigo-600 rounded">
                   <Pencil size={14} />
                 </button>
                 <button onClick={() => onDeleteFloor(floor.id)} className="p-1 text-gray-400 hover:text-red-600 rounded">
@@ -118,6 +137,7 @@ export const RoomGrid: React.FC<RoomGridProps> = ({
           </div>
 
           <div className="p-6">
+            {/* Add Room Form */}
             {addingRoomToFloor === floor.id && (
               <form onSubmit={handleAddRoom} className="mb-6 bg-indigo-50 p-4 rounded-lg flex flex-wrap gap-4 items-end animate-fade-in-down">
                 <div>
@@ -152,6 +172,7 @@ export const RoomGrid: React.FC<RoomGridProps> = ({
               </form>
             )}
 
+            {/* Rooms Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {data.rooms.filter(r => r.floorId === floor.id).map(room => {
                 const roomTenants = getTenantsForRoom(room);
@@ -170,7 +191,7 @@ export const RoomGrid: React.FC<RoomGridProps> = ({
                         <span className="font-bold text-gray-800 text-lg">{room.number}</span>
                         <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
-                            onClick={(e) => handleEditRoomClick(e, room)}
+                            onClick={(e) => startEditRoom(e, room)}
                             className="text-gray-400 hover:text-indigo-600 bg-white p-1 rounded shadow-sm"
                             title="Edit Room"
                           >
@@ -217,6 +238,77 @@ export const RoomGrid: React.FC<RoomGridProps> = ({
           </div>
         </div>
       ))}
+
+      {/* Edit Floor Modal */}
+      {editingFloor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in-up">
+            <div className="bg-gray-100 px-6 py-3 border-b flex justify-between items-center">
+              <h3 className="font-semibold text-gray-800">Edit Floor</h3>
+              <button onClick={() => setEditingFloor(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Floor Name</label>
+              <input 
+                type="text" 
+                className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                value={editFloorName}
+                onChange={(e) => setEditFloorName(e.target.value)}
+              />
+              <div className="mt-6 flex justify-end gap-2">
+                <button onClick={() => setEditingFloor(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>
+                <button onClick={saveFloor} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 flex items-center gap-2">
+                  <Save size={16} /> Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Room Modal */}
+      {editingRoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in-up">
+             <div className="bg-gray-100 px-6 py-3 border-b flex justify-between items-center">
+              <h3 className="font-semibold text-gray-800">Edit Room</h3>
+              <button onClick={() => setEditingRoom(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Room Number</label>
+                <input 
+                  type="text" 
+                  className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={editRoomNumber}
+                  onChange={(e) => setEditRoomNumber(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  max="10"
+                  className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={editRoomCapacity}
+                  onChange={(e) => setEditRoomCapacity(parseInt(e.target.value))}
+                />
+              </div>
+              <div className="mt-6 flex justify-end gap-2">
+                <button onClick={() => setEditingRoom(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>
+                <button onClick={saveRoom} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 flex items-center gap-2">
+                  <Save size={16} /> Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

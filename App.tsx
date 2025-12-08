@@ -9,13 +9,18 @@ import {
   Smartphone,
   LogOut,
   Pencil,
-  Trash2
+  Trash2,
+  Download,
+  FileText
 } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { RoomGrid } from './components/RoomGrid';
 import { TenantModal } from './components/TenantModal';
 import { AIAssistant } from './components/AIAssistant';
-import { AppData, Floor, Room, Tenant, ViewState } from './types';
+import { InstallModal } from './components/InstallModal';
+import { ReceiptModal } from './components/ReceiptModal';
+import { Logo } from './components/Logo';
+import { AppData, Floor, Room, Tenant, ViewState, AppSettings } from './types';
 
 // Helper to generate IDs
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -31,13 +36,28 @@ const INITIAL_DATA: AppData = {
     { id: 'r3', number: '201', floorId: 'f2', capacity: 2, tenants: [] },
     { id: 'r4', number: '202', floorId: 'f2', capacity: 1, tenants: [] }
   ],
-  tenants: []
+  tenants: [],
+  settings: {
+    hostelName: 'Hari PG Hostel',
+    address: '29, PR Layout, Chandra Layout, Marathahalli, Bengaluru, Karnataka 560037',
+    upiId: 'harihostel@upi',
+    contactNumber: '9876543210',
+    signatureText: 'Hari N'
+  }
 };
 
 const App: React.FC = () => {
   const [data, setData] = useState<AppData>(() => {
     const saved = localStorage.getItem('hariPgData');
-    return saved ? JSON.parse(saved) : INITIAL_DATA;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Ensure settings exist for older saves
+      if (!parsed.settings) {
+        parsed.settings = INITIAL_DATA.settings;
+      }
+      return parsed;
+    }
+    return INITIAL_DATA;
   });
   
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.DASHBOARD);
@@ -47,11 +67,42 @@ const App: React.FC = () => {
   const [selectedRoomIdForTenant, setSelectedRoomIdForTenant] = useState<string | null>(null);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   
-  const [showDownloadToast, setShowDownloadToast] = useState(false);
+  // State for Install Modal
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  // State for Receipt Modal
+  const [receiptTenant, setReceiptTenant] = useState<Tenant | null>(null);
 
   useEffect(() => {
     localStorage.setItem('hariPgData', JSON.stringify(data));
   }, [data]);
+
+  // Handle PWA Install Prompt
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else {
+      setIsInstallModalOpen(true);
+    }
+  };
+
+  const updateSettings = (newSettings: AppSettings) => {
+    setData(prev => ({ ...prev, settings: newSettings }));
+  };
 
   // --- Floor Actions ---
   const addFloor = (name: string) => {
@@ -64,6 +115,7 @@ const App: React.FC = () => {
       setData(prev => {
         const floorRooms = prev.rooms.filter(r => r.floorId === floorId).map(r => r.id);
         return {
+          ...prev,
           floors: prev.floors.filter(f => f.id !== floorId),
           rooms: prev.rooms.filter(r => r.floorId !== floorId),
           tenants: prev.tenants.filter(t => !floorRooms.includes(t.roomId))
@@ -142,9 +194,6 @@ const App: React.FC = () => {
 
   const startEditTenant = (tenant: Tenant) => {
     setEditingTenant(tenant);
-    // When editing, we need to ensure the modal opens. The modal checks 'isOpen' based on if a room is selected OR if there is an editing tenant.
-    // However, the current modal props logic relies on `isOpen` boolean derived from selectedRoomId in App's render logic.
-    // We'll update the render logic to treat editingTenant as a trigger for opening.
   };
 
   // --- UI Handlers ---
@@ -161,11 +210,6 @@ const App: React.FC = () => {
     } else {
       alert("Room is fully occupied!");
     }
-  };
-
-  const handleDownloadApp = () => {
-    setShowDownloadToast(true);
-    setTimeout(() => setShowDownloadToast(false), 5000);
   };
 
   const NavItem = ({ view, icon: Icon, label }: { view: ViewState, icon: any, label: string }) => (
@@ -194,8 +238,8 @@ const App: React.FC = () => {
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex flex-col h-full">
-          <div className="h-16 flex items-center px-6 border-b border-gray-100">
-            <h1 className="text-xl font-bold text-indigo-600">Hari PG Hostel</h1>
+          <div className="h-20 flex items-center px-6 border-b border-gray-100">
+            <Logo />
           </div>
           
           <nav className="flex-1 p-4 space-y-2">
@@ -206,14 +250,18 @@ const App: React.FC = () => {
 
           <div className="p-4 border-t border-gray-100 space-y-2">
              <button 
-                onClick={handleDownloadApp}
-                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50"
+                onClick={handleInstallClick}
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 group hover:text-indigo-600"
              >
-                <Smartphone size={20} />
-                <span>Get Mobile App</span>
+                <div className={`transition-transform ${deferredPrompt ? 'scale-110 text-indigo-600' : ''}`}>
+                  {deferredPrompt ? <Download size={20} /> : <Smartphone size={20} />}
+                </div>
+                <span className={deferredPrompt ? "font-bold text-indigo-600" : ""}>
+                  {deferredPrompt ? "Install Now" : "Get Mobile App"}
+                </span>
              </button>
              <div className="text-xs text-center text-gray-400 mt-4">
-                v1.0.0 &copy; 2024
+                v1.2.1 &copy; 2024
              </div>
           </div>
         </div>
@@ -223,7 +271,10 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header Mobile */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:hidden">
-          <h1 className="font-bold text-gray-800">Hari PG</h1>
+          <div className="flex items-center gap-2">
+            <Logo className="h-6 w-6" showText={false} />
+            <span className="font-bold text-gray-800">Hari PG</span>
+          </div>
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-600">
             <Menu size={24} />
           </button>
@@ -261,7 +312,7 @@ const App: React.FC = () => {
                         <th className="px-6 py-3">Mobile</th>
                         <th className="px-6 py-3">Rent</th>
                         <th className="px-6 py-3">Joined</th>
-                        <th className="px-6 py-3">Actions</th>
+                        <th className="px-6 py-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -274,18 +325,25 @@ const App: React.FC = () => {
                             <td className="px-6 py-4 text-gray-600">{tenant.mobile}</td>
                             <td className="px-6 py-4 text-gray-600">₹{tenant.rent}</td>
                             <td className="px-6 py-4 text-gray-600">{tenant.joiningDate}</td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center space-x-3">
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end space-x-2">
+                                <button
+                                  onClick={() => setReceiptTenant(tenant)}
+                                  className="text-green-600 hover:text-green-800 p-1.5 rounded bg-green-50 hover:bg-green-100 transition-colors flex items-center gap-1 text-xs font-medium"
+                                  title="Receipt"
+                                >
+                                  <FileText size={14} /> Receipt
+                                </button>
                                 <button 
                                   onClick={() => startEditTenant(tenant)}
-                                  className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50"
+                                  className="text-blue-500 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition-colors"
                                   title="Edit"
                                 >
                                   <Pencil size={16} />
                                 </button>
                                 <button 
                                   onClick={() => removeTenant(tenant.id)}
-                                  className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"
+                                  className="text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"
                                   title="Remove"
                                 >
                                   <Trash2 size={16} />
@@ -322,18 +380,21 @@ const App: React.FC = () => {
         onSave={handleSaveTenant}
       />
 
-      <AIAssistant data={data} />
+      <InstallModal 
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+      />
 
-      {/* Download Toast */}
-      {showDownloadToast && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-3 animate-fade-in-down">
-          <Smartphone size={20} />
-          <div>
-            <p className="font-semibold text-sm">Install App</p>
-            <p className="text-xs text-gray-300">Tap "Share" {'>'} "Add to Home Screen" in your browser menu.</p>
-          </div>
-        </div>
-      )}
+      <ReceiptModal 
+        isOpen={!!receiptTenant}
+        onClose={() => setReceiptTenant(null)}
+        tenant={receiptTenant}
+        room={data.rooms.find(r => r.id === receiptTenant?.roomId) || null}
+        settings={data.settings}
+        onUpdateSettings={updateSettings}
+      />
+
+      <AIAssistant data={data} />
     </div>
   );
 };

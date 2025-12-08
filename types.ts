@@ -21,10 +21,20 @@ export interface Floor {
   rooms: string[]; // Array of Room IDs
 }
 
+export interface AppSettings {
+  hostelName: string;
+  address: string;
+  upiId: string;
+  contactNumber: string;
+  signatureText?: string;
+  customQrCode?: string; // Base64 string for custom QR image
+}
+
 export interface AppData {
   floors: Floor[];
   rooms: Room[];
   tenants: Tenant[];
+  settings: AppSettings;
 }
 
 export enum ViewState {
